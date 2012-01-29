@@ -4,6 +4,8 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* true) 
 
+(def NODATA ^int java.lang.Integer/MIN_VALUE)
+
 ;;
 ;;(def xmaxa -8369110.637329101)
 ;;(def xmina -8370891.749181792)
@@ -80,6 +82,21 @@
   (let [extent (:extent raster)
         dim (:dimension extent)]
     (* (first dim) (second dim))))
+
+(defn get-cell [^Raster raster ^long c ^long r]
+  (let [w (width (:dimension (:extent raster)))
+        h (height (:dimension (:extent raster)))
+        len (alength ^ints (:data raster))
+        idx (int (+ (* r w) c))]
+    (if (and
+         (>= c 0)
+         (>= r 0)
+         (< c w)
+         (< r h)
+         (>= idx 0)
+         (< idx len))
+      (aget ^ints (:data raster) idx)
+      NODATA)))
 
 ;; Read info from [base] into the given raster extent
 (defn arg32-read [raster-extent base]

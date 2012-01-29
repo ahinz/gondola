@@ -1,5 +1,6 @@
 (ns gondola.op (:gen-class)
     (:require [gondola.core :as core])
+    (:use [gondola.core :only (NODATA)])
     (:import gondola.core.Raster))
 
 (set! *warn-on-reflection* true)
@@ -17,8 +18,6 @@
 (defn run [rasterop]
   "Execute an operation"
   (rasterop nil))
-
-(def NODATA ^int java.lang.Integer/MIN_VALUE)
 
 ;; Raster -> (Int -> Int) -> Raster
 (defn amapi ^ints [^ints a fnc]
@@ -105,6 +104,70 @@
     (* 255.0
        (+ (* (Math/cos zenith_rad) (Math/cos slope_rad))
           (* (* (Math/sin zenith_rad) (Math/sin slope_rad)) (Math/cos (- azimuth_rad aspect_rad)))))))
+
+(defn get-neighbors-or-nodata [raster col row]
+  (let [a (core/get-cell raster (- col 1) (+ row 1))
+        b (core/get-cell raster col (+ row 1))
+        c (core/get-cell raster (+ col 1) (+ row 1))
+
+        d (core/get-cell raster (- col 1) row)
+        e (core/get-cell raster col row)
+        f (core/get-cell raster (+ col 1) row)
+
+        g (core/get-cell raster (- col 1) (- row 1))
+        h (core/get-cell raster col (- row 1))
+        i (core/get-cell raster (+ col 1) (- row 1))]
+    (if (or
+         (= a NODATA)
+         (= b NODATA)
+         (= c NODATA)
+         (= d NODATA)
+         (= e NODATA)
+         (= f NODATA)
+         (= g NODATA)
+         (= h NODATA)
+         (= i NODATA))
+      NODATA
+      [a b c
+       d e f
+       g h i])))
+
+(defn do-cell-neighbor [fnc raster]
+  (let [data ^ints (:data raster)
+        len (alength data)
+        width (core/width (:dimension (:extent raster)))
+        newar (int-array len)]
+    (do
+      (dotimes [row (core/height (:dimension (:extent raster)))]
+        (dotimes [col (core/width (:dimension (:extent raster)))]
+          (let [vec (get-neighbors-or-nodata raster col row)]
+            (aset-int newar (+ (* row width) col)
+                      (if (= NODATA vec)
+                        NODATA
+                        (fnc vec))))))
+      (Raster. newar (:extent raster) (:meta raster)))))
+
+(defn hillshade [altitude azimuth raster]
+  (do-cell-neighbor
+   (fn [z]
+     (hillshade-cell
+      altitude
+      azimuth
+      (:cellwidth (:extent raster))
+      z)), raster))
+
+
+(defn hillshade-op [altitude azimuth rasterop]
+  (fn [z]
+    (timeop "hillshade"
+            (hillshade altitude azimuth (rasterop z)))))
+
+
+;;  (Raster, [Int] -> Int), (Ctxt -> Raster) -> (Ctxt -> Raster)
+(defn do-cell-neighbor-op [fnc rasterop]
+  (fn [z]
+    (timeop "do cell neighbor"
+            (do-cell-neighbor fnc (rasterop z)))))
 
 ;; (Ctxt -> Raster) -> (Int -> Int) -> (Ctxt -> Raster)
 (defn do-cell-op [fnc rasterop]
