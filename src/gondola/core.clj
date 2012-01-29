@@ -2,6 +2,7 @@
     (:require [clojure.xml :as xml]))
 
 (set! *warn-on-reflection* true)
+(set! *unchecked-math* true) 
 
 ;;
 ;;(def xmaxa -8369110.637329101)
@@ -87,45 +88,45 @@
         a32md (parse-arg32 xmlf)
         srcRasterMeta (:geo a32md)
         srcDim (:dimension srcRasterMeta)
-        srcCellHeight (:cellheight srcRasterMeta)
-        srcCellWidth (:cellwidth srcRasterMeta)
-        srcNCells (* (width srcDim) (height srcDim))
+        srcCellHeight (int (:cellheight srcRasterMeta))
+        srcCellWidth (int (:cellwidth srcRasterMeta))
+        srcNCells (int (* (width srcDim) (height srcDim)))
 
         zzz (println "Loading cells *4: " srcNCells)
         
         srcBuffer (.asIntBuffer (get-mmap-buffer rawf (* 4 srcNCells)))
         
-        srcXmin (xmin srcRasterMeta)
-        srcYmin (ymin srcRasterMeta)
-        srcXmax (xmax srcRasterMeta)
-        srcYmax (ymax srcRasterMeta)
+        srcXmin (double (xmin srcRasterMeta))
+        srcYmin (double (ymin srcRasterMeta))
+        srcXmax (double (xmax srcRasterMeta))
+        srcYmax (double (ymax srcRasterMeta))
 
-        srcWidth (- srcXmax srcXmin)
-        srcHeight (- srcYmax srcYmin)
+        srcWidth (double (- srcXmax srcXmin))
+        srcHeight (double (- srcYmax srcYmin))
         
         srcRows (int (/ srcHeight srcCellHeight))
         srcCols (int (/ srcWidth srcCellWidth))
 
-        destXmin (xmin raster-extent)
-        destYmin (ymin raster-extent)
-        destXmax (xmax raster-extent)
-        destYmax (ymax raster-extent)
+        destXmin (double (xmin raster-extent))
+        destYmin (double (ymin raster-extent))
+        destXmax (double (xmax raster-extent))
+        destYmax (double (ymax raster-extent))
 
-        destCellWidth (:cellwidth raster-extent)
-        destCellHeight (:cellheight raster-extent)
+        destCellWidth (int (:cellwidth raster-extent))
+        destCellHeight (int (:cellheight raster-extent))
 
-        destWidth (- destXmax destXmin)
-        destHeight (- destYmax destYmin)
+        destWidth (double (- destXmax destXmin))
+        destHeight (double (- destYmax destYmin))
 
         destRows (int (/ destHeight destCellHeight))
         destCols (int (/ destWidth destCellWidth))
 
-        destNCells (* destRows destCols)
+        destNCells (int (* destRows destCols))
 
         ;; x/yBase is where src is at dest cell (0,0)
         ;; i.e. Dest(0,0) = Src(xBase,yBase)
-        xBase (+ (- destXmin srcXmin) (/ destCellWidth))
-        yBase (+ (- destYmin srcYmin) (/ destCellHeight))
+        xBase (double (+ (- destXmin srcXmin) (/ destCellWidth)))
+        yBase (double (+ (- destYmin srcYmin) (/ destCellHeight)))
 
         zzz (println "Width: " destWidth " height " destHeight " rows: " destRows " cols: " destCols)
         
@@ -140,9 +141,9 @@
         (Raster. destArray raster-extent nil)
           
         ;; Current source row given height
-        (let [srcRow (int (- srcRows (/ y srcCellHeight)))
+        (let [srcRow (- srcRows (unchecked-int (/ y srcCellHeight)))
               srcSpan (* srcRow srcCols)
-              destSpan (* destCols (- destRows 1 destRow))]
+              destSpan (* destCols (- (- destRows 1) destRow))]
             
           ;; skip calc if we aren't in the source at all
           (do
@@ -152,8 +153,8 @@
               (loop [destCol 0 x xBase]
                 (if (>= destCol destCols)
                   nil ;; Ignore return value due to mutating array
-                  (let [srcCol (int (/ x srcCellWidth))
-                        srcIndex (+ srcSpan srcCol)
+                  (let [srcCol (unchecked-divide-int (unchecked-int x) srcCellWidth)
+                        srcIndex (+ (unchecked-int srcSpan) srcCol)
                         destIndex (+ destSpan destCol)]
                     (do
                       (if (and
@@ -161,7 +162,7 @@
                            (< srcCol srcCols)
                            (< srcIndex srcNCells)
                            (>= srcIndex 0))
-                        (aset-int destArray destIndex (.get srcBuffer srcIndex))
+                        (java.lang.reflect.Array/setInt destArray (unchecked-int destIndex) (.get srcBuffer (unchecked-int srcIndex)))
                         nil)
                       (recur (+ destCol 1) (+ x destCellWidth)))))))   
             (recur (+ 1 destRow) (+ destCellHeight y))))))))

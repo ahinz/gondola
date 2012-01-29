@@ -15,11 +15,11 @@
 (def a32extent (:geo (parse-arg32 (str elev ".xml"))))
 
 (def op (do-cell-op
-         (fn [q] (+ (bit-shift-left q 16) (bit-shift-left q 8) q))
+         (fn [^long q] (int (+ (+ (* q 65536) (* q 256)) q)))
          (normalize-op
           0 255
           (load-file-op a32extent elev))))
 
-(def r2 (run op))
 
-(write-raster-to-file r2 "/Users/ahinz/src/azavea/clojure/file.png")
+(defn wop [] (write-raster-to-file (run op) "/Users/ahinz/src/azavea/clojure/file.png"))
+(defn -main [] (write-raster-to-file (run op) "/Users/ahinz/src/azavea/clojure/file.png"))
