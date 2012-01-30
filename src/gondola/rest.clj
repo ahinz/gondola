@@ -9,10 +9,16 @@
 (defmacro s2i [s] `(Integer/parseInt ~s))
 
 (defroutes main-routes
-  (GET "/image" [xmin ymin xmax ymax width height]
+  (GET "/image" [xmin ymin xmax ymax width height altitude azimuth]
        {
         :status 200
-        :body (java.io.ByteArrayInputStream. (.toByteArray (hs (s2d xmin) (s2d ymin) (s2d xmax) (s2d ymax) (s2i width) (s2i height))))
+        :body (java.io.ByteArrayInputStream.
+               (.toByteArray
+                (hs
+                 (s2d xmin) (s2d ymin) (s2d xmax) (s2d ymax)
+                 (s2i width) (s2i height)
+                 (s2d altitude) (s2d azimuth))))
+        
         :headers {"Content-Type" "image/png"}})
   
   (GET "/image2" [] {:status 200

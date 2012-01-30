@@ -27,14 +27,14 @@
           qp 0]
       (unchecked-int (+ 0xff000000 (+ (+ (* qp 65536) (* qp 256)) qp))))))
 
-(defn hs [xmin ymin xmax ymax width height]
+(defn hs [xmin ymin xmax ymax width height altitude azimuth]
   (let [cw (/ (- xmax xmin) width)
         ch (/ (- ymax ymin) height)
         extent (RasterExtent. cw ch [xmin ymin] [width height])
         op (do-cell-nd-op
             cell2clr
             (hillshade-op
-             0 315
+             altitude azimuth
              (load-file-op extent elev)))]
     (write-raster-to-byte-array-output-stream (run op))))
 
