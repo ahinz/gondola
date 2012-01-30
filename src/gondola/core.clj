@@ -83,7 +83,7 @@
         dim (:dimension extent)]
     (* (first dim) (second dim))))
 
-(defn get-cell [^Raster raster ^long c ^long r]
+(defn get-cell ^long [^Raster raster ^long c ^long r]
   (let [w (width (:dimension (:extent raster)))
         h (height (:dimension (:extent raster)))
         len (alength ^ints (:data raster))
@@ -129,25 +129,25 @@
         destXmax (double (xmax raster-extent))
         destYmax (double (ymax raster-extent))
 
-        destCellWidth (int (:cellwidth raster-extent))
-        destCellHeight (int (:cellheight raster-extent))
+        destCellWidth (double (:cellwidth raster-extent))
+        destCellHeight (double (:cellheight raster-extent))
 
         destWidth (double (- destXmax destXmin))
         destHeight (double (- destYmax destYmin))
 
-        destRows (int (/ destHeight destCellHeight))
-        destCols (int (/ destWidth destCellWidth))
+        destRows (int (/ (double destHeight) destCellHeight))
+        destCols (int (/ (double destWidth) destCellWidth))
 
         destNCells (int (* destRows destCols))
 
         ;; x/yBase is where src is at dest cell (0,0)
         ;; i.e. Dest(0,0) = Src(xBase,yBase)
-        xBase (double (+ (- destXmin srcXmin) (/ destCellWidth)))
-        yBase (double (+ (- destYmin srcYmin) (/ destCellHeight)))
+        xBase (double (+ (- destXmin srcXmin) (/ destCellWidth 2)))
+        yBase (double (+ (- destYmin srcYmin) (/ destCellHeight 2)))
 
         zzz (println "Width: " destWidth " height " destHeight " rows: " destRows " cols: " destCols)
         
-        destArray (int-array destNCells)
+        destArray (int-array destNCells NODATA)
 
         minCol (int (/ xBase srcCellWidth))
         maxCol (int (/ (+ xBase (* destCols destCellWidth)) srcCellWidth))]

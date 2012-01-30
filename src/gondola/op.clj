@@ -20,7 +20,7 @@
   (rasterop nil))
 
 ;; Raster -> (Int -> Int) -> Raster
-(defn amapi ^ints [^ints a fnc]
+(defn amapi ^ints [^ints a skip-no-data fnc]
   (let [len (alength a)
         newar (int-array len)]
     (loop [idx 0]
@@ -28,16 +28,23 @@
         (do
           (let [item (aget a (unchecked-int idx))]
             (aset-int newar idx
-                      (if (= NODATA item)
+                      (if (and (= NODATA item) skip-no-data)
                         NODATA
-                        (fnc item))))
+                        (unchecked-int (fnc item)))))
           (recur (unchecked-inc idx)))
         newar))))
+
+(defn do-cell-nd [fnc raster]
+  "Map over each cell in the given raster with the supplied function"
+  (let [data (:data raster)]
+    (Raster. (amapi data false fnc)
+             (:extent raster)
+             (:meta raster))))
 
 (defn do-cell [fnc raster]
   "Map over each cell in the given raster with the supplied function"
   (let [data (:data raster)]
-    (Raster. (amapi data fnc)
+    (Raster. (amapi data true fnc)
              (:extent raster)
              (:meta raster))))
 
@@ -67,35 +74,35 @@
 
 ;;;;;;;;;; Hillshade ;;;;;;;;;;;;;;
 
-(defn deg2rad [d] (if (> d 360)
-                    (recur (- d 360))
-                    (/ (* d Math/PI) 180.0)))
+(defn deg2rad ^double [^double d]
+  (if (> d 360.0)
+    (recur (- d 360.0))
+    (* d 0.0174532925))) ;; 0.0174532925 --> pi/180
 
 (defmacro ++ [a b c] `(+ (+ ~a ~b) ~c))
+(defmacro nthi [v i] `(unchecked-long (nth ~v ~i)))
 
-(defn slope-dz [cellsize [a b c
-                       d e f
-                       g h i]]
-  (let [dzdx (/ (- (++ c (* 2 f) i) (++ a (* 2 d) g)) (* 8 cellsize))
-        dzdy (/ (- (++ g (* 2 h) i) (++ a (* 2 b) c)) (* 8 cellsize))]
+(defn slope-dz [^long cellsize neigh]
+  (let [dzdx (/ (unchecked-double (- (++ (nthi neigh 2) (* 2 (nthi neigh 5)) (nthi neigh 8)) (++ (nthi neigh 0) (* 2 (nthi neigh 3)) (nthi neigh 6)))) (* 8.0 cellsize))
+        dzdy (/ (unchecked-double (- (++ (nthi neigh 6) (* 2 (nthi neigh 7)) (nthi neigh 8)) (++ (nthi neigh 0) (* 2 (nthi neigh 1)) (nthi neigh 2)))) (* 8.0 cellsize))]
     [(double dzdx) (double dzdy)]))
 
-(defn slope [dzdx dzdy]
+(defn slope ^double [^double dzdx ^double dzdy]
   (Math/atan
    (Math/sqrt (+ (* dzdx dzdx)
                  (* dzdy dzdy)))))
 
-(defn aspect [dzdx dzdy]
-  (if (= 0 dzdx)
-    (if (> 0 dzdy)
-      (/ Math/PI 2)
-      (* 3 (/ Math/PI 2)))
+(defn aspect ^double [^double dzdx ^double dzdy]
+  (if (= 0.0 dzdx)
+    (if (> 0.0 dzdy)
+      (/ Math/PI 2.0)
+      (* 3.0 (/ Math/PI 2.0)))
     (let [aspect_rad (Math/atan2 dzdy (- dzdx))]
-      (if (> 0 aspect_rad)
+      (if (> 0.0 aspect_rad)
         (+ (* Math/PI 2.0) aspect_rad)
         aspect_rad))))
 
-(defn hillshade-cell [altitude azimuth cellsize neigh]
+(defn hillshade-cell ^double [^double altitude ^double azimuth ^long cellsize neigh]
   (let [zenith_rad (deg2rad (- 90 altitude))
         azimuth_rad (deg2rad (+ (- 360 azimuth) 90))
         [dzdx dzdy] (slope-dz cellsize neigh)
@@ -105,8 +112,8 @@
        (+ (* (Math/cos zenith_rad) (Math/cos slope_rad))
           (* (* (Math/sin zenith_rad) (Math/sin slope_rad)) (Math/cos (- azimuth_rad aspect_rad)))))))
 
-(defn get-neighbors-or-nodata [raster col row]
-  (let [a (core/get-cell raster (- col 1) (+ row 1))
+(defn get-neighbors-or-nodata [^Raster raster ^long col ^long row]
+  (let [a (unchecked-int (core/get-cell raster (- col 1) (+ row 1)))
         b (core/get-cell raster col (+ row 1))
         c (core/get-cell raster (+ col 1) (+ row 1))
 
@@ -127,24 +134,27 @@
          (= g NODATA)
          (= h NODATA)
          (= i NODATA))
-      NODATA
+      nil
       [a b c
        d e f
        g h i])))
 
+(defn cr2idx ^long [^long width ^long col ^long row]
+  (+ (* width row) col))
+
 (defn do-cell-neighbor [fnc raster]
   (let [data ^ints (:data raster)
         len (alength data)
-        width (core/width (:dimension (:extent raster)))
+        width (unchecked-int (core/width (:dimension (:extent raster))))
         newar (int-array len)]
     (do
-      (dotimes [row (core/height (:dimension (:extent raster)))]
-        (dotimes [col (core/width (:dimension (:extent raster)))]
-          (let [vec (get-neighbors-or-nodata raster col row)]
-            (aset-int newar (+ (* row width) col)
-                      (if (= NODATA vec)
-                        NODATA
-                        (fnc vec))))))
+      (dotimes [row (unchecked-int (core/height (:dimension (:extent raster))))]
+        (dotimes [col (unchecked-int (core/width (:dimension (:extent raster))))]
+          (let [vec (get-neighbors-or-nodata raster (unchecked-long col) (unchecked-long row))]
+            (aset-int newar (cr2idx width col row)
+                      (if vec
+                        (fnc vec)
+                        NODATA)))))
       (Raster. newar (:extent raster) (:meta raster)))))
 
 (defn hillshade [altitude azimuth raster]
@@ -174,6 +184,11 @@
   "Map over each cell in the given raster with the supplied function"
   (fn [z]
     (timeop "do cell" (do-cell fnc (rasterop z)))))
+
+(defn do-cell-nd-op [fnc rasterop]
+  "Map over each cell in the given raster with the supplied function"
+  (fn [z]
+    (timeop "do cell" (do-cell-nd fnc (rasterop z)))))
 
 
 ;; RasterExtent -> String -> (Ctxt -> Raster)
